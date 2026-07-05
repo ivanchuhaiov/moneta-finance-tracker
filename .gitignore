@@ -1,0 +1,25 @@
+# Секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Python-мусор
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# IDE (PyCharm/.idea хранит локальные настройки, БД-креды и т.д.)
+.idea/
+
+# ОС-мусор
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
