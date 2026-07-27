@@ -7,6 +7,7 @@ class WalletCreate(BaseModel):
     name: str
     wallet_type_id: int
     currency_id: int
+    balance: Decimal
 
 class WalletUpdate(BaseModel):
     name: str | None = None

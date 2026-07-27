@@ -21,3 +21,10 @@ async def get_owned_wallet(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your wallet")
 
     return wallet
+
+async def get_active_owned_wallet(
+    wallet: Wallet = Depends(get_owned_wallet),
+) -> Wallet:
+    if not wallet.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wallet is not active")
+    return wallet

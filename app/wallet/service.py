@@ -12,6 +12,7 @@ async def create_wallet(session: AsyncSession, data: WalletCreate, user_id: int)
         wallet_type_id=data.wallet_type_id,
         currency_id=data.currency_id,
         user_id=user_id,
+        balance=data.balance
     )
     session.add(wallet)
     await session.commit()
