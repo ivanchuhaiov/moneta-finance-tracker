@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     google_client_id: str
     google_client_secret: str
     google_redirect_uri: str
+    SUPPORTED_CURRENCIES: list[str] = ["EUR", "USD", "UAH"]
 
     model_config = SettingsConfigDict(env_file=".env")
 

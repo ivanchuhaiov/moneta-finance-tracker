@@ -7,3 +7,4 @@ from app.models.wallet import Wallet
 from app.models.credit_operation import CreditOperation
 from app.models.debit_operation import DebitOperation
 from app.models.transaction_history import TransactionHistory
+from app.models.exchange_rate import ExchangeRate

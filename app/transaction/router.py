@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.database import get_db
 from app.auth.dependencies import get_current_user
+from app.core.enums import CurrencyCode
 from app.models import User, Wallet
 from app.wallet.dependencies import get_active_owned_wallet
 from app.transaction.schema import (
@@ -41,12 +42,12 @@ async def transaction_history(
 
 @router.get("/wallets/summary/total-balance", response_model=TotalBalanceResponse)
 async def get_total_wallet_balance(
+    currency: CurrencyCode,
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    balance = await get_total_balance(session, current_user.id)
-    return TotalBalanceResponse(user_id=current_user.id, balance=balance)
-
+    balance = await get_total_balance(session, current_user.id, currency.value)
+    return TotalBalanceResponse(user_id=current_user.id, balance=balance, currency=currency.value)
 @router.get("/wallets/{wallet_id}/operations", response_model=OperationsListResponse)
 async def get_operations(
     wallet: Wallet = Depends(get_active_owned_wallet),

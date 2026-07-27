@@ -2,6 +2,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
+from sqlalchemy.orm import selectinload
+
 from app.models import Wallet
 from app.wallet.schemas import WalletCreate, WalletUpdate
 
@@ -20,11 +22,19 @@ async def create_wallet(session: AsyncSession, data: WalletCreate, user_id: int)
     return wallet
 
 async def get_wallet_by_id(session: AsyncSession, wallet_id: int) -> Wallet | None:
-    result = await session.execute(select(Wallet).where(Wallet.id == wallet_id))
+    result = await session.execute(
+        select(Wallet)
+        .options(selectinload(Wallet.currency))
+        .where(Wallet.id == wallet_id)
+    )
     return result.scalar_one_or_none()
 
 async def get_wallet_by_user(session: AsyncSession, user_id: int) -> list[Wallet]:
-    result = await session.execute(select(Wallet).where(Wallet.user_id == user_id))
+    result = await session.execute(
+        select(Wallet)
+        .options(selectinload(Wallet.currency))
+        .where(Wallet.user_id == user_id)
+    )
     return list(result.scalars().all())
 
 async def update_wallet(session: AsyncSession, wallet: Wallet, data: WalletUpdate) -> Wallet:

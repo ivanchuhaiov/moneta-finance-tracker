@@ -18,7 +18,7 @@ class CreditOperationResponse(BaseModel):
     id: int
     wallet_id: int
     amount: Decimal
-    credit_type_id: int
+    credit_type_id: int | None = None
     operation_date: datetime
     created_at: datetime
 
@@ -28,7 +28,7 @@ class DebitOperationResponse(BaseModel):
     id: int
     wallet_id: int
     amount: Decimal
-    debit_type_id: int
+    debit_type_id: int | None = None
     operation_date: datetime
     created_at: datetime
 
@@ -62,6 +62,7 @@ class WalletBalanceResponse(BaseModel):
 class TotalBalanceResponse(BaseModel):
     user_id: int
     balance: Decimal
+    currency: str
 
     model_config = ConfigDict(from_attributes=True)
 
