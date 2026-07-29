@@ -1,9 +1,13 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import String, Text, ForeignKey, Numeric, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+if TYPE_CHECKING:
+    from app.models import Wallet, CreditOperation, DebitOperation
+
 
 class TransactionHistory(Base):
     __tablename__ = 'transaction_history'
@@ -22,3 +26,7 @@ class TransactionHistory(Base):
     credit_operation_id: Mapped[int | None] = mapped_column(ForeignKey('credit_operation.id'))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+    from_wallet: Mapped["Wallet | None"] = relationship(foreign_keys=[from_wallet_id])
+    to_wallet: Mapped["Wallet | None"] = relationship(foreign_keys=[to_wallet_id])
+    credit_operation: Mapped["CreditOperation | None"] = relationship()
+    debit_operation: Mapped["DebitOperation | None"] = relationship()

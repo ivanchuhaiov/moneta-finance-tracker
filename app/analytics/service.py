@@ -2,298 +2,247 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from calendar import monthrange
 from collections import defaultdict
+from typing import NamedTuple
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, selectinload
 
-from app.models import (
-    TransactionHistory, CreditOperation, DebitOperation,
-    CreditType, DebitType, Wallet, Currency, ExchangeRate,
-)
+from app.models import TransactionHistory, Wallet
+from app.analytics import repository
+from app.analytics.conversion import RatesIndex, find_rate_for_date, convert_amount, round_money
 from app.analytics.schemas import (
-    SummarySchema, CategoryBreakdownSchema, WalletSummarySchema, TrendPointSchema,
+    SummarySchema, CategoryBreakdownSchema, WalletSummarySchema, TrendPointSchema, TransactionType,
 )
+
+
+class TransactionAmount(NamedTuple):
+    transaction: TransactionHistory
+    amount: Decimal | None
+    currency: str | None
+    category: str | None
 
 
 def get_period_range(period: str, target_date: date) -> tuple[datetime, datetime]:
-    if period == "month":
-        year, month = target_date.year, target_date.month
-        days_in_month = monthrange(year, month)[1]
+    if period != "month":
+        raise ValueError(f"Unsupported period: {period}")
 
-        date_from = datetime(year, month, 1, 0, 0, 0, tzinfo=timezone.utc)
-        date_to = datetime(year, month, days_in_month, 23, 59, 59, tzinfo=timezone.utc)
+    year, month = target_date.year, target_date.month
+    days_in_month = monthrange(year, month)[1]
 
-        return date_from, date_to
+    date_from = datetime(year, month, 1, tzinfo=timezone.utc)
+    date_to = datetime(year, month, days_in_month, 23, 59, 59, tzinfo=timezone.utc)
 
-    raise ValueError(f"Unsupported period: {period}")
-
-
-async def get_transactions_for_period(
-    session: AsyncSession, user_id: int, date_from: datetime, date_to: datetime
-) -> list[dict]:
-    FromWallet = aliased(Wallet)
-    ToWallet = aliased(Wallet)
-    FromCurrency = aliased(Currency)
-    ToCurrency = aliased(Currency)
-
-    stmt = (
-        select(
-            TransactionHistory.operation_code,
-            TransactionHistory.transaction_date,
-            TransactionHistory.from_amount,
-            TransactionHistory.to_amount,
-            TransactionHistory.from_wallet_id,
-            TransactionHistory.to_wallet_id,
-            FromWallet.name.label("from_wallet_name"),
-            ToWallet.name.label("to_wallet_name"),
-            FromCurrency.code.label("from_currency"),
-            ToCurrency.code.label("to_currency"),
-            CreditType.name.label("credit_category"),
-            DebitType.name.label("debit_category"),
-        )
-        .outerjoin(CreditOperation, TransactionHistory.credit_operation_id == CreditOperation.id)
-        .outerjoin(CreditType, CreditOperation.credit_type_id == CreditType.id)
-        .outerjoin(DebitOperation, TransactionHistory.debit_operation_id == DebitOperation.id)
-        .outerjoin(DebitType, DebitOperation.debit_type_id == DebitType.id)
-        .outerjoin(FromWallet, TransactionHistory.from_wallet_id == FromWallet.id)
-        .outerjoin(ToWallet, TransactionHistory.to_wallet_id == ToWallet.id)
-        .outerjoin(FromCurrency, FromWallet.currency_id == FromCurrency.id)
-        .outerjoin(ToCurrency, ToWallet.currency_id == ToCurrency.id)
-        .where(
-            TransactionHistory.user_id == user_id,
-            TransactionHistory.transaction_date >= date_from,
-            TransactionHistory.transaction_date <= date_to,
-        )
-    )
-
-    result = await session.execute(stmt)
-    rows = result.all()
-
-    transactions = []
-    for row in rows:
-        if row.operation_code == "credit":
-            amount = row.from_amount
-            currency = row.to_currency
-            category = row.credit_category or "Без категории"
-        elif row.operation_code == "debit":
-            amount = row.from_amount
-            currency = row.from_currency
-            category = row.debit_category or "Без категории"
-        else:  # transfer
-            amount = None
-            currency = None
-            category = None
-
-        transactions.append({
-            "operation_code": row.operation_code,
-            "transaction_date": row.transaction_date,
-            "amount": amount,
-            "currency": currency,
-            "category": category,
-            "from_wallet_id": row.from_wallet_id,
-            "to_wallet_id": row.to_wallet_id,
-            "from_wallet_name": row.from_wallet_name,
-            "to_wallet_name": row.to_wallet_name,
-            "from_amount": row.from_amount,
-            "to_amount": row.to_amount,
-            "from_currency": row.from_currency,
-            "to_currency": row.to_currency,
-        })
-
-    return transactions
+    return date_from, date_to
 
 
-async def get_rates_batch(
-    session: AsyncSession, pairs: set[tuple[str, str]], date_to: datetime
-) -> dict[tuple[str, str], list[tuple[datetime, Decimal]]]:
-    if not pairs:
-        return {}
+def get_transaction_amount_and_currency(tx: TransactionHistory) -> tuple[Decimal | None, str | None, str | None]:
+    if tx.operation_code == "credit":
+        category = "Без категории"
+        if tx.credit_operation and tx.credit_operation.credit_type:
+            category = tx.credit_operation.credit_type.name
+        return tx.from_amount, tx.to_wallet.currency.code, category
 
-    conditions = [
-        (ExchangeRate.base_currency == base) & (ExchangeRate.target_currency == target)
-        for base, target in pairs
-    ]
-    from sqlalchemy import or_
+    if tx.operation_code == "debit":
+        category = "Без категории"
+        if tx.debit_operation and tx.debit_operation.debit_type:
+            category = tx.debit_operation.debit_type.name
+        return tx.from_amount, tx.from_wallet.currency.code, category
 
-    stmt = (
-        select(ExchangeRate.base_currency, ExchangeRate.target_currency, ExchangeRate.rate, ExchangeRate.fetched_at)
-        .where(or_(*conditions), ExchangeRate.fetched_at <= date_to)
-        .order_by(ExchangeRate.fetched_at.asc())
-    )
-
-    result = await session.execute(stmt)
-    rows = result.all()
-
-    rates_index: dict[tuple[str, str], list[tuple[datetime, Decimal]]] = defaultdict(list)
-    for row in rows:
-        key = (row.base_currency, row.target_currency)
-        rates_index[key].append((row.fetched_at, row.rate))
-
-    return rates_index
+    return None, None, None
 
 
-def find_rate_for_date(
-    rates_index: dict, base: str, target: str, target_date: datetime
-) -> Decimal | None:
-    entries = rates_index.get((base, target))
-    if not entries:
-        return None
-
-    matching_rate = None
-    for fetched_at, rate in entries:
-        if fetched_at <= target_date:
-            matching_rate = rate
-        else:
-            break
-
-    return matching_rate
+def filter_relevant_transactions(transactions: list[TransactionHistory]) -> list[TransactionHistory]:
+    result = []
+    for tx in transactions:
+        if tx.operation_code != "transfer":
+            result.append(tx)
+    return result
 
 
-def convert_amount(
-    amount: Decimal, from_currency: str, to_currency: str, rate: Decimal | None
-) -> Decimal:
-    if from_currency == to_currency:
-        return amount
-    if rate is None:
-        return Decimal("0")
-    return (amount * rate).quantize(Decimal("0.01"))
+def enrich_transactions(transactions: list[TransactionHistory]) -> list[TransactionAmount]:
+    enriched = []
+    for tx in transactions:
+        amount, currency, category = get_transaction_amount_and_currency(tx)
+        enriched.append(TransactionAmount(tx, amount, currency, category))
+    return enriched
+
+
+def collect_currency_pairs(enriched: list[TransactionAmount], target_currency: str) -> set[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for item in enriched:
+        if item.currency is None or item.currency == target_currency:
+            continue
+        pairs.add((item.currency, target_currency))
+    return pairs
+
+
+async def _prepare_period_data(
+    session: AsyncSession, user_id: int, period: str, target_date: date, target_currency: str
+) -> tuple[list[TransactionAmount], RatesIndex, datetime]:
+
+    date_from, date_to = get_period_range(period, target_date)
+    transactions = await repository.get_transactions_for_period(session, user_id, date_from, date_to)
+
+    relevant = filter_relevant_transactions(transactions)
+    enriched = enrich_transactions(relevant)
+
+    pairs = collect_currency_pairs(enriched, target_currency)
+    rates_index = await repository.get_rates_batch(session, pairs, date_to)
+
+    return enriched, rates_index, date_to
 
 
 async def get_summary(
     session: AsyncSession, user_id: int, period: str, target_date: date, target_currency: str
 ) -> SummarySchema:
-    date_from, date_to = get_period_range(period, target_date)
-    transactions = await get_transactions_for_period(session, user_id, date_from, date_to)
-
-    relevant = [t for t in transactions if t["operation_code"] != "transfer"]
-
-    pairs = {(t["currency"], target_currency) for t in relevant if t["currency"] != target_currency}
-    rates_index = await get_rates_batch(session, pairs, date_to)
+    enriched, rates_index, date_to = await _prepare_period_data(session, user_id, period, target_date, target_currency)
 
     total_income = Decimal("0")
     total_expense = Decimal("0")
+    missing_count = 0
 
-    for t in relevant:
-        rate = find_rate_for_date(rates_index, t["currency"], target_currency, t["transaction_date"])
-        converted = convert_amount(t["amount"], t["currency"], target_currency, rate)
+    for item in enriched:
+        rate = find_rate_for_date(rates_index, item.currency, target_currency, item.transaction.transaction_date)
+        converted = convert_amount(item.amount, item.currency, target_currency, rate, item.transaction.transaction_date)
 
-        if t["operation_code"] == "credit":
+        if converted is None:
+            missing_count += 1
+            continue
+
+        if item.transaction.operation_code == "credit":
             total_income += converted
         else:
             total_expense += converted
 
     return SummarySchema(
-        total_income=total_income,
-        total_expense=total_expense,
-        net=total_income - total_expense,
+        total_income=round_money(total_income),
+        total_expense=round_money(total_expense),
+        net=round_money(total_income - total_expense),
         currency=target_currency,
+        has_missing_data=missing_count > 0,
+        missing_count=missing_count,
     )
 
 
 async def get_by_category(
     session: AsyncSession, user_id: int, period: str, target_date: date, target_currency: str
 ) -> list[CategoryBreakdownSchema]:
-    date_from, date_to = get_period_range(period, target_date)
-    transactions = await get_transactions_for_period(session, user_id, date_from, date_to)
+    enriched, rates_index, date_to = await _prepare_period_data(session, user_id, period, target_date, target_currency)
 
-    relevant = [t for t in transactions if t["operation_code"] != "transfer"]
+    totals: dict[tuple[str, TransactionType], Decimal] = defaultdict(lambda: Decimal("0"))
+    missing_counts: dict[tuple[str, TransactionType], int] = defaultdict(int)
 
-    pairs = {(t["currency"], target_currency) for t in relevant if t["currency"] != target_currency}
-    rates_index = await get_rates_batch(session, pairs, date_to)
+    for item in enriched:
+        rate = find_rate_for_date(rates_index, item.currency, target_currency, item.transaction.transaction_date)
+        converted = convert_amount(item.amount, item.currency, target_currency, rate, item.transaction.transaction_date)
 
-    totals: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
+        if item.transaction.operation_code == "credit":
+            type_label = TransactionType.INCOME
+        else:
+            type_label = TransactionType.EXPENSE
 
-    for t in relevant:
-        rate = find_rate_for_date(rates_index, t["currency"], target_currency, t["transaction_date"])
-        converted = convert_amount(t["amount"], t["currency"], target_currency, rate)
+        key = (item.category, type_label)
 
-        type_label = "income" if t["operation_code"] == "credit" else "expense"
-        key = (t["category"], type_label)
+        if converted is None:
+            missing_counts[key] += 1
+            continue
+
         totals[key] += converted
 
-    return [
-        CategoryBreakdownSchema(category=category, total=total, type=type_label)
-        for (category, type_label), total in totals.items()
-    ]
+    result = []
+    for key, total in totals.items():
+        category = key[0]
+        type_label = key[1]
+        missing_count = missing_counts[key]
 
+        breakdown = CategoryBreakdownSchema(
+            category=category,
+            total=round_money(total),
+            type=type_label,
+            has_missing_data=missing_count > 0,
+            missing_count=missing_count,
+        )
+        result.append(breakdown)
 
-async def get_by_wallet(session, user_id, period, target_date, target_currency):
-    date_from, date_to = get_period_range(period, target_date)
-    transactions = await get_transactions_for_period(session, user_id, date_from, date_to)
+    return result
 
-    # Новый шаг: подтягиваем ВСЕ кошельки юзера заранее
-    wallets_result = await session.execute(
-        select(Wallet).options(selectinload(Wallet.currency)).where(Wallet.user_id == user_id)
-    )
-    all_wallets = wallets_result.scalars().all()
-
-    wallet_totals = {
-        w.id: {
-            "wallet_name": w.name,
-            "wallet_currency": w.currency.code,
-            "total_in_wallet_currency": Decimal("0"),
-            "total_in_target_currency": Decimal("0"),
-        }
-        for w in all_wallets
+def _new_wallet_entry(wallet: Wallet) -> dict:
+    return {
+        "wallet_name": wallet.name,
+        "wallet_currency": wallet.currency.code,
+        "total_in_wallet_currency": Decimal("0"),
+        "total_in_target_currency": Decimal("0"),
+        "missing_count": 0,
     }
-    def ensure_wallet(wallet_id: int, wallet_name: str, wallet_currency: str):
-        if wallet_id not in wallet_totals:
-            wallet_totals[wallet_id] = {
-                "wallet_name": wallet_name,
-                "wallet_currency": wallet_currency,
-                "total_in_wallet_currency": Decimal("0"),
-                "total_in_target_currency": Decimal("0"),
-            }
+
+
+def _apply_wallet_delta(
+    wallet_totals: dict, wallet_id: int, amount: Decimal, converted: Decimal | None, sign: int
+) -> None:
+    entry = wallet_totals[wallet_id]
+    entry["total_in_wallet_currency"] += sign * amount
+
+    if converted is None:
+        entry["missing_count"] += 1
+        return
+
+    entry["total_in_target_currency"] += sign * converted
+
+
+async def get_by_wallet(
+    session: AsyncSession, user_id: int, period: str, target_date: date, target_currency: str
+) -> list[WalletSummarySchema]:
+    date_from, date_to = get_period_range(period, target_date)
+    transactions = await repository.get_transactions_for_period(session, user_id, date_from, date_to)
+
+    wallets = await repository.get_wallets_for_analytics(session, user_id)
+
+    wallet_totals = {}
+    for wallet in wallets:
+        wallet_totals[wallet.id] = _new_wallet_entry(wallet)
+
+    included_wallet_ids = set(wallet_totals.keys())
 
     pairs = set()
-    for t in transactions:
-        if t["from_currency"] and t["from_currency"] != target_currency:
-            pairs.add((t["from_currency"], target_currency))
-        if t["to_currency"] and t["to_currency"] != target_currency:
-            pairs.add((t["to_currency"], target_currency))
+    for wallet in wallets:
+        if wallet.currency.code != target_currency:
+            pairs.add((wallet.currency.code, target_currency))
 
-    rates_index = await get_rates_batch(session, pairs, date_to)
+    rates_index = await repository.get_rates_batch(session, pairs, date_to)
 
-    for t in transactions:
-        if t["operation_code"] == "credit":
-            ensure_wallet(t["to_wallet_id"], t["to_wallet_name"], t["to_currency"])
-            wallet_totals[t["to_wallet_id"]]["total_in_wallet_currency"] += t["from_amount"]
-            rate = find_rate_for_date(rates_index, t["to_currency"], target_currency, t["transaction_date"])
-            converted = convert_amount(t["from_amount"], t["to_currency"], target_currency, rate)
-            wallet_totals[t["to_wallet_id"]]["total_in_target_currency"] += converted
+    for tx in transactions:
+        legs = []
 
-        elif t["operation_code"] == "debit":
-            ensure_wallet(t["from_wallet_id"], t["from_wallet_name"], t["from_currency"])
-            wallet_totals[t["from_wallet_id"]]["total_in_wallet_currency"] -= t["from_amount"]
-            rate = find_rate_for_date(rates_index, t["from_currency"], target_currency, t["transaction_date"])
-            converted = convert_amount(t["from_amount"], t["from_currency"], target_currency, rate)
-            wallet_totals[t["from_wallet_id"]]["total_in_target_currency"] -= converted
+        if tx.operation_code == "credit" and tx.to_wallet_id in included_wallet_ids:
+            legs.append((tx.to_wallet_id, tx.to_wallet.currency.code, tx.from_amount, 1))
 
-        else:  # transfer
-            ensure_wallet(t["from_wallet_id"], t["from_wallet_name"], t["from_currency"])
-            ensure_wallet(t["to_wallet_id"], t["to_wallet_name"], t["to_currency"])
+        elif tx.operation_code == "debit" and tx.from_wallet_id in included_wallet_ids:
+            legs.append((tx.from_wallet_id, tx.from_wallet.currency.code, tx.from_amount, -1))
 
-            wallet_totals[t["from_wallet_id"]]["total_in_wallet_currency"] -= t["from_amount"]
-            rate_from = find_rate_for_date(rates_index, t["from_currency"], target_currency, t["transaction_date"])
-            converted_from = convert_amount(t["from_amount"], t["from_currency"], target_currency, rate_from)
-            wallet_totals[t["from_wallet_id"]]["total_in_target_currency"] -= converted_from
+        elif tx.operation_code == "transfer":
+            if tx.from_wallet_id in included_wallet_ids:
+                legs.append((tx.from_wallet_id, tx.from_wallet.currency.code, tx.from_amount, -1))
+            if tx.to_wallet_id in included_wallet_ids:
+                legs.append((tx.to_wallet_id, tx.to_wallet.currency.code, tx.to_amount, 1))
 
-            wallet_totals[t["to_wallet_id"]]["total_in_wallet_currency"] += t["to_amount"]
-            rate_to = find_rate_for_date(rates_index, t["to_currency"], target_currency, t["transaction_date"])
-            converted_to = convert_amount(t["to_amount"], t["to_currency"], target_currency, rate_to)
-            wallet_totals[t["to_wallet_id"]]["total_in_target_currency"] += converted_to
+        for wallet_id, currency, amount, sign in legs:
+            rate = find_rate_for_date(rates_index, currency, target_currency, tx.transaction_date)
+            converted = convert_amount(amount, currency, target_currency, rate, tx.transaction_date)
+            _apply_wallet_delta(wallet_totals, wallet_id, amount, converted, sign)
 
-    return [
-        WalletSummarySchema(
+    result = []
+    for wallet_id, data in wallet_totals.items():
+        summary = WalletSummarySchema(
             wallet_id=wallet_id,
             wallet_name=data["wallet_name"],
             wallet_currency=data["wallet_currency"],
-            total_in_wallet_currency=data["total_in_wallet_currency"],
-            total_in_target_currency=data["total_in_target_currency"],
+            total_in_wallet_currency=round_money(data["total_in_wallet_currency"]),
+            total_in_target_currency=round_money(data["total_in_target_currency"]),
+            has_missing_data=data["missing_count"] > 0,
+            missing_count=data["missing_count"],
         )
-        for wallet_id, data in wallet_totals.items()
-    ]
+        result.append(summary)
+
+    return result
 
 
 async def get_trend(
@@ -310,11 +259,13 @@ async def get_trend(
 
         summary = await get_summary(session, user_id, "month", point_date, target_currency)
 
-        points.append(TrendPointSchema(
-            period=f"{year}-{month:02d}",
-            income=summary.total_income,
-            expense=summary.total_expense,
-            net=summary.net,
-        ))
+        points.append(
+            TrendPointSchema(
+                period=f"{year}-{month:02d}",
+                income=summary.total_income,
+                expense=summary.total_expense,
+                net=summary.net,
+            )
+        )
 
     return points
