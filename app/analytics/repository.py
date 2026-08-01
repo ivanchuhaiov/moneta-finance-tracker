@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, desc
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,3 +67,22 @@ async def get_rates_batch(
         rates_index.setdefault(key, []).append(RateEntry(fetched_at=row.fetched_at, rate=row.rate))
 
     return rates_index
+
+async def get_recent_transactions(
+    session: AsyncSession, user_id: int, limit: int
+) -> list[TransactionHistory]:
+    stmt = (
+        select(TransactionHistory)
+        .options(
+            selectinload(TransactionHistory.from_wallet).selectinload(Wallet.currency),
+            selectinload(TransactionHistory.to_wallet).selectinload(Wallet.currency),
+            selectinload(TransactionHistory.credit_operation).selectinload(CreditOperation.credit_type),
+            selectinload(TransactionHistory.debit_operation).selectinload(DebitOperation.debit_type),
+        )
+        .where(TransactionHistory.user_id == user_id)
+        .order_by(desc(TransactionHistory.transaction_date))
+        .limit(limit)
+    )
+
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

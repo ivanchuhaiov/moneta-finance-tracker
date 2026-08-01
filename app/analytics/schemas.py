@@ -1,43 +1,58 @@
+from datetime import date as date_type, datetime
 from decimal import Decimal
-from enum import Enum
-
 from pydantic import BaseModel
 
 
-class TransactionType(str, Enum):
-    INCOME = "income"
-    EXPENSE = "expense"
+class WalletBalanceSchema(BaseModel):
+    wallet_id: int
+    wallet_name: str
+    wallet_currency: str
+    balance: Decimal
 
 
-class SummarySchema(BaseModel):
-    total_income: Decimal
-    total_expense: Decimal
-    net: Decimal
+class RecentTransactionSchema(BaseModel):
+    transaction_id: int
+    transaction_date: datetime
+    operation_code: str
+    description: str | None
+    amount: Decimal
     currency: str
-    has_missing_data: bool
-    missing_count: int
+
+
+class DashboardSchema(BaseModel):
+    wallets: list[WalletBalanceSchema]
+    total_balance: Decimal
+    currency: str
+    recent_transactions: list[RecentTransactionSchema]
+    current_month_income: Decimal
+    current_month_expense: Decimal
 
 
 class CategoryBreakdownSchema(BaseModel):
     category: str
     total: Decimal
-    type: TransactionType
-    has_missing_data: bool
-    missing_count: int
+    percentage: Decimal
 
 
-class WalletSummarySchema(BaseModel):
-    wallet_id: int
-    wallet_name: str
-    wallet_currency: str
-    total_in_wallet_currency: Decimal
-    total_in_target_currency: Decimal
-    has_missing_data: bool
-    missing_count: int
+class PeriodComparisonSchema(BaseModel):
+    current_income: Decimal
+    previous_income: Decimal
+    income_change_percentage: Decimal
+    current_expense: Decimal
+    previous_expense: Decimal
+    expense_change_percentage: Decimal
+    currency: str
 
 
-class TrendPointSchema(BaseModel):
-    period: str
+class CashflowWeekSchema(BaseModel):
+    week_start: date_type
+    week_end: date_type
     income: Decimal
     expense: Decimal
-    net: Decimal
+
+
+class SavingsRateSchema(BaseModel):
+    income: Decimal
+    expense: Decimal
+    savings_rate_percentage: Decimal
+    currency: str
