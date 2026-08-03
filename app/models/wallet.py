@@ -1,10 +1,14 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from sqlalchemy import String, ForeignKey, Numeric, Boolean, DateTime
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.core.database import Base
-from app.models import User, WalletType, Currency
+
+if TYPE_CHECKING:
+    from app.models import Currency, User, WalletType
 
 
 class Wallet(Base):
@@ -31,5 +35,3 @@ class Wallet(Base):
     user: Mapped["User"] = relationship(back_populates="wallets")
     wallet_type: Mapped["WalletType"] = relationship()
     currency: Mapped["Currency"] = relationship()
-
-

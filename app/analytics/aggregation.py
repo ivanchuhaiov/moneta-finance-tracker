@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.analytics import repository
 from app.analytics.conversion import find_rate_for_date, convert_amount, round_money
 from app.analytics.helpers import (
-    get_month_range, build_category_label, get_transaction_display_info, is_wallet_included_in_balance,
+    build_category_label, calculate_percentage_share, get_month_range,
+    get_transaction_display_info, is_wallet_included_in_balance,
 )
 from app.analytics.schemas import CategoryBreakdownSchema
-from app.analytics.helpers import calculate_percentage_share
 
 
 @dataclass

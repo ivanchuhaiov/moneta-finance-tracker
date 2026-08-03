@@ -4,8 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Moneta"
     debug: bool = False
-    secret_key: str
-    DATABASE_URL: str
+    database_url: str
 
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
@@ -15,7 +14,8 @@ class Settings(BaseSettings):
     google_client_id: str
     google_client_secret: str
     google_redirect_uri: str
-    SUPPORTED_CURRENCIES: list[str] = ["EUR", "USD", "UAH"]
+
+    supported_currencies: list[str] = ["EUR", "USD", "UAH"]
 
     model_config = SettingsConfigDict(env_file=".env")
 

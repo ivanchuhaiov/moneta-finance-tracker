@@ -5,7 +5,8 @@ from app.exchange.service import scheduled_update_rates
 
 scheduler = AsyncIOScheduler()
 
-def setup_scheduler():
+
+def setup_scheduler() -> None:
     scheduler.add_job(
         scheduled_update_rates,
         IntervalTrigger(hours=6),

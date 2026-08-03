@@ -1,12 +1,13 @@
-from fastapi import FastAPI
-from app.routers import health
-from app.auth.router import router as auth_router
-from app.wallet.router import router as wallet_router
-from app.transaction.router import router as transaction_router
-from app.analytics.router import router as analytics_router
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+
+from app.analytics.router import router as analytics_router
+from app.auth.router import router as auth_router
 from app.core.scheduler import scheduler, setup_scheduler
+from app.routers import health
+from app.transaction.router import router as transaction_router
+from app.wallet.router import router as wallet_router
 
 
 @asynccontextmanager
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
+
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(health.router)
@@ -23,6 +25,3 @@ app.include_router(auth_router)
 app.include_router(wallet_router)
 app.include_router(transaction_router)
 app.include_router(analytics_router)
-
-
-

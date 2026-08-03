@@ -1,8 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql.sqltypes import DateTime
+from sqlalchemy import DateTime, Enum as SAEnum, Integer, String
 
 from app.core.database import Base
 from app.core.enums import JobStatus

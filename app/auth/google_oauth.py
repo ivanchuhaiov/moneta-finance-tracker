@@ -30,13 +30,3 @@ async def get_google_user_info(access_token: str) -> dict:
     response.raise_for_status()
     data = response.json()
     return data
-
-
-
-
-
-
-
-
-
-

@@ -9,3 +9,18 @@ from app.models.debit_operation import DebitOperation
 from app.models.transaction_history import TransactionHistory
 from app.models.exchange_rate import ExchangeRate
 from app.models.scheduled_job_log import ScheduledJobLog
+
+
+__all__ = [
+    "User",
+    "Currency",
+    "WalletType",
+    "CreditType",
+    "DebitType",
+    "Wallet",
+    "CreditOperation",
+    "DebitOperation",
+    "TransactionHistory",
+    "ExchangeRate",
+    "ScheduledJobLog",
+]

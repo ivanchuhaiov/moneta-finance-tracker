@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.auth.dependencies import get_current_user
+from app.core.database import get_db
 from app.models import User, Wallet
-from app.wallet.schemas import WalletCreate, WalletUpdate, WalletResponse
+from app.wallet.dependencies import get_owned_wallet
+from app.wallet.schemas import WalletCreate, WalletResponse, WalletUpdate
 from app.wallet.service import (
     create_wallet,
-    get_wallet_by_user,
-    update_wallet,
     deactivate_wallet,
+    get_wallets_by_user,
+    update_wallet,
 )
-from app.wallet.dependencies import get_owned_wallet
 
 router = APIRouter(prefix="/wallets", tags=["wallets"])
 
@@ -30,8 +30,7 @@ async def list_wallets(
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await get_wallet_by_user(session, current_user.id)
-
+    return await get_wallets_by_user(session, current_user.id)
 
 
 @router.get("/{wallet_id}", response_model=WalletResponse)
@@ -54,5 +53,3 @@ async def deactivate_wallet_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     return await deactivate_wallet(session, wallet)
-
-

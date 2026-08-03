@@ -1,21 +1,21 @@
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analytics import repository
-from app.analytics.aggregation import get_categorized_amounts, build_category_breakdown, get_month_totals
-from app.analytics.conversion import find_rate_for_date, convert_amount, round_money
+from app.analytics.aggregation import build_category_breakdown, get_categorized_amounts, get_month_totals
+from app.analytics.conversion import convert_amount, find_rate_for_date, round_money
 from app.analytics.helpers import (
-    get_previous_month_date, get_iso_week_start, build_datetime_range,
-    calculate_percentage_change, calculate_percentage_share, get_transaction_display_info,
+    build_datetime_range, calculate_percentage_change, calculate_percentage_share,
+    get_iso_week_start, get_previous_month_date, get_transaction_display_info,
 )
 from app.analytics.schemas import (
-    DashboardSchema, WalletBalanceSchema, RecentTransactionSchema,
-    CategoryBreakdownSchema, PeriodComparisonSchema, CashflowWeekSchema, SavingsRateSchema,
+    CashflowWeekSchema, CategoryBreakdownSchema, DashboardSchema,
+    PeriodComparisonSchema, RecentTransactionSchema, SavingsRateSchema, WalletBalanceSchema,
 )
-from app.transaction.service import get_wallet_balance
+from app.transaction.service import calculate_balance
 
 
 RECENT_TRANSACTIONS_LIMIT = 10
@@ -146,7 +146,7 @@ async def get_dashboard(
     total_balance = Decimal("0")
 
     for wallet in wallets:
-        balance = await get_wallet_balance(session, wallet.id)
+        balance = await calculate_balance(session, wallet)
 
         wallet_schema = WalletBalanceSchema(
             wallet_id=wallet.id,
