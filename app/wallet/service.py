@@ -1,12 +1,27 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.log_audit_event import log_audit_event
+from app.core.enums import AuditAction, EntityType
 from app.models import Wallet
 from app.wallet import repository
 from app.wallet.schemas import WalletCreate, WalletUpdate
 
 
 async def create_wallet(session: AsyncSession, data: WalletCreate, user_id: int) -> Wallet:
-    return await repository.create_wallet(session, data, user_id)
+    wallet = await repository.create_wallet(session, data, user_id)
+
+    await log_audit_event(
+        session=session,
+        user_id=user_id,
+        action=AuditAction.CREATE,
+        entity_type=EntityType.WALLET,
+        entity_id=wallet.id,
+        details={"name": wallet.name, "balance": str(wallet.balance)},
+    )
+
+    await session.commit()
+    await session.refresh(wallet)
+    return wallet
 
 
 async def get_wallet_by_id(session: AsyncSession, wallet_id: int) -> Wallet | None:
@@ -18,12 +33,51 @@ async def get_wallets_by_user(session: AsyncSession, user_id: int) -> list[Walle
 
 
 async def update_wallet(session: AsyncSession, wallet: Wallet, data: WalletUpdate) -> Wallet:
-    return await repository.update_wallet(session, wallet, data)
+    update_data = data.model_dump(exclude_unset=True)
+    wallet = await repository.update_wallet(session, wallet, data)
+
+    await log_audit_event(
+        session=session,
+        user_id=wallet.user_id,
+        action=AuditAction.UPDATE,
+        entity_type=EntityType.WALLET,
+        entity_id=wallet.id,
+        details=update_data,
+    )
+
+    await session.commit()
+    await session.refresh(wallet)
+    return wallet
 
 
 async def delete_wallet(session: AsyncSession, wallet: Wallet) -> None:
+    wallet_id = wallet.id
+    user_id = wallet.user_id
+
+    await log_audit_event(
+        session=session,
+        user_id=user_id,
+        action=AuditAction.DELETE,
+        entity_type=EntityType.WALLET,
+        entity_id=wallet_id,
+    )
+
     await repository.delete_wallet(session, wallet)
+    await session.commit()
 
 
 async def deactivate_wallet(session: AsyncSession, wallet: Wallet) -> Wallet:
-    return await repository.deactivate_wallet(session, wallet)
+    wallet = await repository.deactivate_wallet(session, wallet)
+
+    await log_audit_event(
+        session=session,
+        user_id=wallet.user_id,
+        action=AuditAction.UPDATE,
+        entity_type=EntityType.WALLET,
+        entity_id=wallet.id,
+        details={"is_active": False},
+    )
+
+    await session.commit()
+    await session.refresh(wallet)
+    return wallet
