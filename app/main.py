@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+from app.core.logging import setup_logging
+from app.core.middleware import RequestLoggingMiddleware
 
 from fastapi import FastAPI
 
@@ -17,9 +19,10 @@ async def lifespan(app: FastAPI):
     yield
     scheduler.shutdown()
 
-
+setup_logging()
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(RequestLoggingMiddleware)
 app.include_router(health.router)
 app.include_router(auth_router)
 app.include_router(wallet_router)

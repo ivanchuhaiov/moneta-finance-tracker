@@ -11,3 +11,12 @@ class JobStatus(str, Enum):
     RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
+
+class AuditAction(str, Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+
+class EntityType(str, Enum):
+    WALLET = "WALLET"
+    TRANSACTION = "TRANSACTION"
