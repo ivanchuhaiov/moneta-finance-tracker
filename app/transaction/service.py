@@ -5,6 +5,8 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
+from app.core.log_audit_event import log_audit_event
+from app.core.enums import AuditAction, EntityType
 from app.exchange.service import get_latest_rate
 from app.models import CreditOperation, DebitOperation, TransactionHistory, User, Wallet
 from app.transaction import repository
@@ -33,6 +35,17 @@ async def create_credit_operation(
         credit_operation_id=credit_operation.id,
     )
     await repository.save_transaction(session, transaction)
+
+    await log_audit_event(
+        session=session,
+        user_id=current_user.id,
+        action=AuditAction.CREATE,
+        entity_type=EntityType.TRANSACTION,
+        entity_id=transaction.id,
+        details={"operation_code": "credit", "wallet_id": wallet_id, "amount": str(data.amount)},
+    )
+
+    await session.commit()
     await session.refresh(credit_operation)
 
     return credit_operation
@@ -59,6 +72,17 @@ async def create_debit_operation(
         debit_operation_id=debit_operation.id,
     )
     await repository.save_transaction(session, transaction)
+
+    await log_audit_event(
+        session=session,
+        user_id=current_user.id,
+        action=AuditAction.CREATE,
+        entity_type=EntityType.TRANSACTION,
+        entity_id=transaction.id,
+        details={"operation_code": "debit", "wallet_id": wallet_id, "amount": str(data.amount)},
+    )
+
+    await session.commit()
     await session.refresh(debit_operation)
 
     return debit_operation
@@ -190,8 +214,26 @@ async def transfer_between_wallets(session: AsyncSession, data: TransferRequest,
         debit_operation_id=debit_operation.id,
         credit_operation_id=credit_operation.id,
     )
+    await repository.save_transaction(session, transaction)
 
-    return await repository.save_transaction(session, transaction)
+    await log_audit_event(
+        session=session,
+        user_id=current_user.id,
+        action=AuditAction.CREATE,
+        entity_type=EntityType.TRANSACTION,
+        entity_id=transaction.id,
+        details={
+            "operation_code": "transfer",
+            "from_wallet_id": data.from_wallet_id,
+            "to_wallet_id": data.to_wallet_id,
+            "amount": str(data.amount),
+        },
+    )
+
+    await session.commit()
+    await session.refresh(transaction)
+
+    return transaction
 
 
 async def get_transaction_history(session: AsyncSession, user_id: int) -> list[TransactionHistory]:

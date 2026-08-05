@@ -58,8 +58,7 @@ async def save_debit_operation(session: AsyncSession, debit_operation: DebitOper
 
 async def save_transaction(session: AsyncSession, transaction: TransactionHistory) -> TransactionHistory:
     session.add(transaction)
-    await session.commit()
-    await session.refresh(transaction)
+    await session.flush()
     return transaction
 
 

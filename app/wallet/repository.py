@@ -17,8 +17,7 @@ async def create_wallet(session: AsyncSession, data: WalletCreate, user_id: int)
         balance=data.balance,
     )
     session.add(wallet)
-    await session.commit()
-    await session.refresh(wallet)
+    await session.flush()
     return wallet
 
 
@@ -44,21 +43,14 @@ async def update_wallet(session: AsyncSession, wallet: Wallet, data: WalletUpdat
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(wallet, field, value)
-
-    await session.commit()
-    await session.refresh(wallet)
     return wallet
 
 
 async def delete_wallet(session: AsyncSession, wallet: Wallet) -> None:
     await session.delete(wallet)
-    await session.commit()
 
 
 async def deactivate_wallet(session: AsyncSession, wallet: Wallet) -> Wallet:
     wallet.is_active = False
     wallet.blocked_at = datetime.now(timezone.utc)
-
-    await session.commit()
-    await session.refresh(wallet)
     return wallet

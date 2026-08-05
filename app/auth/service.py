@@ -38,7 +38,10 @@ async def register_user(user_data: UserCreate, db: AsyncSession) -> User:
         status="active",
     )
 
-    return await repository.create_user(new_user, db)
+    new_user = await repository.create_user(new_user, db)
+    await db.commit()
+    await db.refresh(new_user)
+    return new_user
 
 
 async def login_user(credentials: LoginRequest, db: AsyncSession) -> tuple[str, str]:
@@ -108,6 +111,8 @@ async def authenticate_google(payload: GoogleAuthRequest, db: AsyncSession) -> t
         user = await _create_google_user(email, google_id, user_info, db)
     elif user.google_id is None:
         user = await repository.link_google_account(user, google_id, db)
+        await db.commit()
+        await db.refresh(user)
 
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)
@@ -131,4 +136,7 @@ async def _create_google_user(email: str, google_id: str, user_info: dict, db: A
         status="active",
     )
 
-    return await repository.create_user(new_user, db)
+    new_user = await repository.create_user(new_user, db)
+    await db.commit()
+    await db.refresh(new_user)
+    return new_user

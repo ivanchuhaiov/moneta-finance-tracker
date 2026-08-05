@@ -24,13 +24,10 @@ async def get_user_by_google_id(google_id: str, db: AsyncSession) -> User | None
 
 async def create_user(user: User, db: AsyncSession) -> User:
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    await db.flush()
     return user
 
 
 async def link_google_account(user: User, google_id: str, db: AsyncSession) -> User:
     user.google_id = google_id
-    await db.commit()
-    await db.refresh(user)
     return user

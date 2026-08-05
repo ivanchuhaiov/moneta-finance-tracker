@@ -9,6 +9,7 @@ from app.models.debit_operation import DebitOperation
 from app.models.transaction_history import TransactionHistory
 from app.models.exchange_rate import ExchangeRate
 from app.models.scheduled_job_log import ScheduledJobLog
+from app.models.audit_log import AuditLog
 
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "TransactionHistory",
     "ExchangeRate",
     "ScheduledJobLog",
+    "AuditLog",
 ]
