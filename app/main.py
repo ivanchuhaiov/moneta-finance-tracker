@@ -10,6 +10,7 @@ from app.core.scheduler import scheduler, setup_scheduler
 from app.routers import health
 from app.transaction.router import router as transaction_router
 from app.wallet.router import router as wallet_router
+from app.features.reports.router import router as report_router
 
 
 @asynccontextmanager
@@ -28,3 +29,4 @@ app.include_router(auth_router)
 app.include_router(wallet_router)
 app.include_router(transaction_router)
 app.include_router(analytics_router)
+app.include_router(report_router)
