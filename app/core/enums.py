@@ -20,3 +20,5 @@ class AuditAction(str, Enum):
 class EntityType(str, Enum):
     WALLET = "WALLET"
     TRANSACTION = "TRANSACTION"
+    REPORT = "REPORT"
+
