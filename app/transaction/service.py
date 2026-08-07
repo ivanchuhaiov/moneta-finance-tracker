@@ -8,10 +8,17 @@ from starlette import status
 from app.core.log_audit_event import log_audit_event
 from app.core.enums import AuditAction, EntityType
 from app.exchange.service import get_latest_rate
-from app.models import CreditOperation, DebitOperation, TransactionHistory, User, Wallet
 from app.transaction import repository
-from app.transaction.schemas import CreditOperationRequest, DebitOperationRequest, TransferRequest
 from app.wallet.service import get_wallet_by_id
+from app.models import CreditOperation, CreditType, DebitOperation, DebitType, TransactionHistory, User, Wallet
+from app.transaction.schemas import (
+    CreditOperationRequest,
+    CreditTypeCreate,
+    DebitOperationRequest,
+    DebitTypeCreate,
+    TransferRequest,
+)
+
 
 
 async def create_credit_operation(
@@ -238,3 +245,37 @@ async def transfer_between_wallets(session: AsyncSession, data: TransferRequest,
 
 async def get_transaction_history(session: AsyncSession, user_id: int) -> list[TransactionHistory]:
     return await repository.get_transaction_history(session, user_id)
+
+async def create_credit_type(session: AsyncSession, data: CreditTypeCreate, user_id: int) -> CreditType:
+    credit_type = CreditType(
+        code=data.code,
+        name=data.name,
+        user_id=user_id,
+    )
+    await repository.save_credit_type(session, credit_type)
+
+    await session.commit()
+    await session.refresh(credit_type)
+
+    return credit_type
+
+
+async def create_debit_type(session: AsyncSession, data: DebitTypeCreate, user_id: int) -> DebitType:
+    debit_type = DebitType(
+        code=data.code,
+        name=data.name,
+        user_id=user_id,
+    )
+    await repository.save_debit_type(session, debit_type)
+
+    await session.commit()
+    await session.refresh(debit_type)
+    return debit_type
+
+
+async def get_credit_types_by_user(session: AsyncSession, user_id: int) -> list[CreditType]:
+    return await repository.get_credit_types_by_user(session, user_id)
+
+
+async def get_debit_types_by_user(session: AsyncSession, user_id: int) -> list[DebitType]:
+    return await repository.get_debit_types_by_user(session, user_id)

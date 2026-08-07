@@ -69,3 +69,33 @@ class TotalBalanceResponse(BaseModel):
 class OperationsListResponse(BaseModel):
     debits: list[DebitOperationResponse]
     credits: list[CreditOperationResponse]
+
+class CreditTypeCreate(BaseModel):
+    code: str
+    name: str
+
+class CreditTypeResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class DebitTypeCreate(BaseModel):
+    code: str
+    name: str
+
+class DebitTypeResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CurrencyResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    symbol: str
+
+    model_config = ConfigDict(from_attributes=True)

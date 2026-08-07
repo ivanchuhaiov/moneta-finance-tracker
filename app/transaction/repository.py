@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import CreditOperation, DebitOperation, TransactionHistory, Wallet
-
+from app.models import CreditOperation, CreditType, DebitOperation, DebitType, TransactionHistory, Wallet
 
 async def get_debit_operations(session: AsyncSession, wallet_id: int) -> list[DebitOperation]:
     result = await session.execute(
@@ -67,5 +67,30 @@ async def get_transaction_history(session: AsyncSession, user_id: int) -> list[T
         select(TransactionHistory)
         .where(TransactionHistory.user_id == user_id)
         .order_by(TransactionHistory.transaction_date.desc())
+    )
+    return list(result.scalars().all())
+
+async def save_credit_type(session: AsyncSession, credit_type: CreditType) -> CreditType:
+    session.add(credit_type)
+    await session.flush()
+    return credit_type
+
+
+async def save_debit_type(session: AsyncSession, debit_type: DebitType) -> DebitType:
+    session.add(debit_type)
+    await session.flush()
+    return debit_type
+
+
+async def get_credit_types_by_user(session: AsyncSession, user_id: int) -> list[CreditType]:
+    result = await session.execute(
+        select(CreditType).where(CreditType.user_id == user_id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_debit_types_by_user(session: AsyncSession, user_id: int) -> list[DebitType]:
+    result = await session.execute(
+        select(DebitType).where(DebitType.user_id == user_id)
     )
     return list(result.scalars().all())

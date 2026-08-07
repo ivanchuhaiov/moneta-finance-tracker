@@ -2,9 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.log_audit_event import log_audit_event
 from app.core.enums import AuditAction, EntityType
-from app.models import Wallet
+from app.models import Wallet, WalletType, Currency
 from app.wallet import repository
-from app.wallet.schemas import WalletCreate, WalletUpdate
+from app.wallet.schemas import WalletCreate, WalletUpdate, WalletTypeCreate
 
 
 async def create_wallet(session: AsyncSession, data: WalletCreate, user_id: int) -> Wallet:
@@ -29,7 +29,7 @@ async def get_wallet_by_id(session: AsyncSession, wallet_id: int) -> Wallet | No
 
 
 async def get_wallets_by_user(session: AsyncSession, user_id: int) -> list[Wallet]:
-    return await repository.get_wallet_by_user(session, user_id)
+    return await repository.get_wallets_by_user(session, user_id)
 
 
 async def update_wallet(session: AsyncSession, wallet: Wallet, data: WalletUpdate) -> Wallet:
@@ -81,3 +81,25 @@ async def deactivate_wallet(session: AsyncSession, wallet: Wallet) -> Wallet:
     await session.commit()
     await session.refresh(wallet)
     return wallet
+
+async def create_wallet_type(session, user_id, data: WalletTypeCreate) -> WalletType:
+    wallet_type = await repository.create_wallet_type(session, data, user_id)
+
+    await log_audit_event(
+        session=session,
+        user_id=user_id,
+        action=AuditAction.CREATE,
+        entity_type=EntityType.WALLET,
+        entity_id=wallet_type.id,
+        details={"name": wallet_type.name},
+    )
+
+    await session.commit()
+    await session.refresh(wallet_type)
+    return wallet_type
+
+async def get_wallet_types_by_user(session, user_id) -> list[WalletType]:
+    return await repository.get_wallet_types_by_user(session, user_id)
+
+async def get_all_currencies(session: AsyncSession) -> list[Currency]:
+    return await repository.get_all_currencies(session)
