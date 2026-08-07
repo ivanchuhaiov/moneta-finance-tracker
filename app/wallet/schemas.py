@@ -27,3 +27,18 @@ class WalletResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class WalletTypeCreate(BaseModel):
+    code: str
+    name: str
+
+class WalletTypeResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class CurrencyResponse(BaseModel):
+    name: str
+    code: str
+
