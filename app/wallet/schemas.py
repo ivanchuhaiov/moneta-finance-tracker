@@ -39,6 +39,9 @@ class WalletTypeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class CurrencyResponse(BaseModel):
+    id: int
     name: str
     code: str
+
+    model_config = ConfigDict(from_attributes=True)
 

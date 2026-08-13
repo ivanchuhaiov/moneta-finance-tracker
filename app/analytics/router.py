@@ -15,10 +15,12 @@ router = APIRouter(prefix="/api", tags=["analytics"])
 @router.get("/dashboard", response_model=DashboardSchema)
 async def dashboard(
     currency: CurrencyCode = CurrencyCode.EUR,
+    date_from: date | None = None,
+    date_to: date | None = None,
     session=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return await service.get_dashboard(session, current_user.id, currency.value)
+    return await service.get_dashboard(session, current_user.id, currency.value, date_from, date_to)
 
 
 @router.get("/analytics/expenses", response_model=list[CategoryBreakdownSchema])
@@ -46,25 +48,31 @@ async def income_by_category(
 @router.get("/analytics/summary", response_model=PeriodComparisonSchema)
 async def summary(
     currency: CurrencyCode = CurrencyCode.EUR,
+    date_from: date | None = None,
+    date_to: date | None = None,
     session=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return await service.get_summary(session, current_user.id, currency.value)
+    return await service.get_summary(session, current_user.id, currency.value, date_from, date_to)
 
 
 @router.get("/analytics/cashflow", response_model=list[CashflowWeekSchema])
 async def cashflow(
     currency: CurrencyCode = CurrencyCode.EUR,
+    date_from: date | None = None,
+    date_to: date | None = None,
     session=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return await service.get_cashflow(session, current_user.id, currency.value)
+    return await service.get_cashflow(session, current_user.id, currency.value, date_from, date_to)
 
 
 @router.get("/analytics/savings-rate", response_model=SavingsRateSchema)
 async def savings_rate(
     currency: CurrencyCode = CurrencyCode.EUR,
+    date_from: date | None = None,
+    date_to: date | None = None,
     session=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return await service.get_savings_rate(session, current_user.id, currency.value)
+    return await service.get_savings_rate(session, current_user.id, currency.value, date_from, date_to)

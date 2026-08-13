@@ -24,17 +24,21 @@ async def lifespan(app: FastAPI):
 setup_logging()
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(RequestLoggingMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(RequestLoggingMiddleware)
-
-
-app.add_middleware(RequestLoggingMiddleware)
 app.include_router(health.router)
 app.include_router(auth_router)
 app.include_router(wallet_router)

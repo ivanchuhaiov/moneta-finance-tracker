@@ -31,6 +31,24 @@ class WeekAccumulator:
     expense: Decimal = Decimal("0")
 
 
+async def get_totals_for_range(
+    session: AsyncSession, user_id: int, date_from: date, date_to: date, target_currency: str
+) -> tuple[Decimal, Decimal]:
+    range_from, range_to = build_datetime_range(date_from, date_to)
+    items = await get_categorized_amounts(session, user_id, range_from, range_to, target_currency)
+
+    income = Decimal("0")
+    expense = Decimal("0")
+
+    for item in items:
+        if item.operation_code == "credit":
+            income += item.amount
+        elif item.operation_code == "debit":
+            expense += item.amount
+
+    return round_money(income), round_money(expense)
+
+
 async def get_expenses_by_category(
     session: AsyncSession, user_id: int, date_from: date, date_to: date, target_currency: str
 ) -> list[CategoryBreakdownSchema]:
@@ -48,13 +66,29 @@ async def get_income_by_category(
 
 
 async def get_summary(
-    session: AsyncSession, user_id: int, target_currency: str
+    session: AsyncSession,
+    user_id: int,
+    target_currency: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> PeriodComparisonSchema:
-    today = date.today()
-    previous_month_date = get_previous_month_date(today)
+    if date_from is not None and date_to is not None:
+        period_length_days = (date_to - date_from).days + 1
+        previous_date_to = date_from - timedelta(days=1)
+        previous_date_from = previous_date_to - timedelta(days=period_length_days - 1)
 
-    current_income, current_expense = await get_month_totals(session, user_id, today, target_currency)
-    previous_income, previous_expense = await get_month_totals(session, user_id, previous_month_date, target_currency)
+        current_income, current_expense = await get_totals_for_range(
+            session, user_id, date_from, date_to, target_currency
+        )
+        previous_income, previous_expense = await get_totals_for_range(
+            session, user_id, previous_date_from, previous_date_to, target_currency
+        )
+    else:
+        today = date.today()
+        previous_month_date = get_previous_month_date(today)
+
+        current_income, current_expense = await get_month_totals(session, user_id, today, target_currency)
+        previous_income, previous_expense = await get_month_totals(session, user_id, previous_month_date, target_currency)
 
     return PeriodComparisonSchema(
         current_income=current_income,
@@ -68,19 +102,27 @@ async def get_summary(
 
 
 async def get_cashflow(
-    session: AsyncSession, user_id: int, target_currency: str
+    session: AsyncSession,
+    user_id: int,
+    target_currency: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[CashflowWeekSchema]:
-    today = date.today()
-    lookback_days = DAYS_IN_CASHFLOW_MONTH * CASHFLOW_LOOKBACK_MONTHS
-    range_start_date = today - timedelta(days=lookback_days)
-    first_week_start = get_iso_week_start(range_start_date)
+    if date_to is None:
+        date_to = date.today()
 
-    date_from, date_to = build_datetime_range(first_week_start, today)
-    items = await get_categorized_amounts(session, user_id, date_from, date_to, target_currency)
+    if date_from is None:
+        lookback_days = DAYS_IN_CASHFLOW_MONTH * CASHFLOW_LOOKBACK_MONTHS
+        date_from = date_to - timedelta(days=lookback_days)
+
+    first_week_start = get_iso_week_start(date_from)
+
+    range_from, range_to = build_datetime_range(first_week_start, date_to)
+    items = await get_categorized_amounts(session, user_id, range_from, range_to, target_currency)
 
     weeks: dict[date, WeekAccumulator] = {}
     week_start = first_week_start
-    while week_start <= today:
+    while week_start <= date_to:
         week_end = week_start + timedelta(days=6)
         weeks[week_start] = WeekAccumulator(week_start=week_start, week_end=week_end)
         week_start += timedelta(days=7)
@@ -113,10 +155,17 @@ async def get_cashflow(
 
 
 async def get_savings_rate(
-    session: AsyncSession, user_id: int, target_currency: str
+    session: AsyncSession,
+    user_id: int,
+    target_currency: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> SavingsRateSchema:
-    today = date.today()
-    income, expense = await get_month_totals(session, user_id, today, target_currency)
+    if date_from is not None and date_to is not None:
+        income, expense = await get_totals_for_range(session, user_id, date_from, date_to, target_currency)
+    else:
+        today = date.today()
+        income, expense = await get_month_totals(session, user_id, today, target_currency)
 
     savings = income - expense
     rate = calculate_percentage_share(savings, income)
@@ -130,7 +179,11 @@ async def get_savings_rate(
 
 
 async def get_dashboard(
-    session: AsyncSession, user_id: int, target_currency: str
+    session: AsyncSession,
+    user_id: int,
+    target_currency: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> DashboardSchema:
     wallets = await repository.get_wallets_for_analytics(session, user_id)
 
@@ -175,7 +228,14 @@ async def get_dashboard(
         )
         recent_transaction_schemas.append(transaction_schema)
 
-    current_month_income, current_month_expense = await get_month_totals(session, user_id, date.today(), target_currency)
+    if date_from is not None and date_to is not None:
+        current_month_income, current_month_expense = await get_totals_for_range(
+            session, user_id, date_from, date_to, target_currency
+        )
+    else:
+        current_month_income, current_month_expense = await get_month_totals(
+            session, user_id, date.today(), target_currency
+        )
 
     return DashboardSchema(
         wallets=wallet_schemas,
