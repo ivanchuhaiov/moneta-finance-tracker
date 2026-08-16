@@ -17,6 +17,11 @@ class Settings(BaseSettings):
 
     supported_currencies: list[str] = ["EUR", "USD", "UAH"]
 
+    anthropic_api_key: str
+    anthropic_model: str = "claude-sonnet-4-5-20250929"
+    anthropic_max_tokens: int = 1024
+    anthropic_temperature: float = 0.3
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
