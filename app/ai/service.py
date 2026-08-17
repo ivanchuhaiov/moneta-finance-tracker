@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import anthropic
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel
 
 from app.ai.exceptions import (
     LLMAuthenticationError,
@@ -17,6 +18,12 @@ from app.core.config import settings
 class LLMService(ABC):
     @abstractmethod
     async def generate_text(self, prompt: str, system_prompt: str | None = None) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def generate_structured(
+            self, prompt: str, output_schema: type[BaseModel], system_prompt: str | None = None
+    ) -> BaseModel:
         raise NotImplementedError
 
 
@@ -49,3 +56,28 @@ class AnthropicLLMService(LLMService):
             raise LLMServiceError(f"Anthropic API error: {e}") from e
 
         return response.content
+
+    async def generate_structured(
+        self, prompt: str, output_schema: type[BaseModel], system_prompt: str | None = None
+    ) -> BaseModel:
+        messages = []
+        if system_prompt is not None:
+            messages.append(SystemMessage(content=system_prompt))
+        messages.append(HumanMessage(content=prompt))
+
+        structured_client = self._client.with_structured_output(output_schema)
+
+        try:
+            response = await structured_client.ainvoke(messages)
+        except anthropic.RateLimitError as e:
+            raise LLMRateLimitError("Anthropic API rate limit exceeded") from e
+        except anthropic.AuthenticationError as e:
+            raise LLMAuthenticationError("Invalid Anthropic API key") from e
+        except anthropic.APITimeoutError as e:
+            raise LLMTimeoutError("Anthropic API request timed out") from e
+        except anthropic.APIConnectionError as e:
+            raise LLMConnectionError("Could not connect to Anthropic API") from e
+        except anthropic.APIError as e:
+            raise LLMServiceError(f"Anthropic API error: {e}") from e
+
+        return response
