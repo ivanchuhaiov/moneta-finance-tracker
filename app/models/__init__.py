@@ -10,6 +10,8 @@ from app.models.transaction_history import TransactionHistory
 from app.models.exchange_rate import ExchangeRate
 from app.models.scheduled_job_log import ScheduledJobLog
 from app.models.audit_log import AuditLog
+from app.models.chat_message import ChatMessage
+from app.models.chat_conversation import ChatConversation
 
 
 __all__ = [
@@ -25,4 +27,6 @@ __all__ = [
     "ExchangeRate",
     "ScheduledJobLog",
     "AuditLog",
+    "ChatConversation",
+    "ChatMessage",
 ]

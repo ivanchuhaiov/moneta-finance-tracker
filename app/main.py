@@ -16,6 +16,7 @@ from app.ai.router import router as ai_router
 from app.ai.exception_handlers import register_ai_exception_handlers
 from app.ai.summary.router import router as summary_router
 from app.ai.categorize.router import router as categorize_router
+from app.ai.chat.router import router as chat_router
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -54,5 +55,6 @@ app.include_router(wallet_type_router)
 app.include_router(ai_router)
 app.include_router(summary_router)
 app.include_router(categorize_router)
+app.include_router(chat_router)
 
 register_ai_exception_handlers(app)

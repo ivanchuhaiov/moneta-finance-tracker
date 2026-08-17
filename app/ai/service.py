@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 
 import anthropic
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage, AIMessage
+from langchain_core.tools import StructuredTool
 from pydantic import BaseModel
 
 from app.ai.exceptions import (
@@ -24,6 +25,12 @@ class LLMService(ABC):
     async def generate_structured(
             self, prompt: str, output_schema: type[BaseModel], system_prompt: str | None = None
     ) -> BaseModel:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def generate_with_tools(
+            self, messages: list[BaseMessage], tools: list[StructuredTool], system_prompt: str | None = None
+    ) -> AIMessage:
         raise NotImplementedError
 
 
@@ -69,6 +76,31 @@ class AnthropicLLMService(LLMService):
 
         try:
             response = await structured_client.ainvoke(messages)
+        except anthropic.RateLimitError as e:
+            raise LLMRateLimitError("Anthropic API rate limit exceeded") from e
+        except anthropic.AuthenticationError as e:
+            raise LLMAuthenticationError("Invalid Anthropic API key") from e
+        except anthropic.APITimeoutError as e:
+            raise LLMTimeoutError("Anthropic API request timed out") from e
+        except anthropic.APIConnectionError as e:
+            raise LLMConnectionError("Could not connect to Anthropic API") from e
+        except anthropic.APIError as e:
+            raise LLMServiceError(f"Anthropic API error: {e}") from e
+
+        return response
+
+    async def generate_with_tools(
+            self, messages: list[BaseMessage], tools: list[StructuredTool], system_prompt: str | None = None
+    ) -> AIMessage:
+        full_messages = []
+        if system_prompt is not None:
+            full_messages.append(SystemMessage(content=system_prompt))
+        full_messages.extend(messages)
+
+        client_with_tools = self._client.bind_tools(tools)
+
+        try:
+            response = await client_with_tools.ainvoke(full_messages)
         except anthropic.RateLimitError as e:
             raise LLMRateLimitError("Anthropic API rate limit exceeded") from e
         except anthropic.AuthenticationError as e:
