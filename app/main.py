@@ -14,6 +14,7 @@ from app.features.reports.router import router as report_router
 from app.wallet.router import wallet_type_router as wallet_type_router
 from app.ai.router import router as ai_router
 from app.ai.exception_handlers import register_ai_exception_handlers
+from app.ai.summary.router import router as summary_router
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -50,5 +51,6 @@ app.include_router(analytics_router)
 app.include_router(report_router)
 app.include_router(wallet_type_router)
 app.include_router(ai_router)
+app.include_router(summary_router)
 
 register_ai_exception_handlers(app)

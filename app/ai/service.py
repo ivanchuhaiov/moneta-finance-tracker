@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import anthropic
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.ai.exceptions import (
     LLMAuthenticationError,
@@ -16,7 +16,7 @@ from app.core.config import settings
 
 class LLMService(ABC):
     @abstractmethod
-    async def generate_text(self, prompt: str) -> str:
+    async def generate_text(self, prompt: str, system_prompt: str | None = None) -> str:
         raise NotImplementedError
 
 
@@ -29,10 +29,14 @@ class AnthropicLLMService(LLMService):
             temperature=settings.anthropic_temperature,
         )
 
-    async def generate_text(self, prompt: str) -> str:
-        message = HumanMessage(content=prompt)
+    async def generate_text(self, prompt: str, system_prompt: str | None = None) -> str:
+        messages = []
+        if system_prompt is not None:
+            messages.append(SystemMessage(content=system_prompt))
+        messages.append(HumanMessage(content=prompt))
+
         try:
-            response = await self._client.ainvoke([message])
+            response = await self._client.ainvoke(messages)
         except anthropic.RateLimitError as e:
             raise LLMRateLimitError("Anthropic API rate limit exceeded") from e
         except anthropic.AuthenticationError as e:
