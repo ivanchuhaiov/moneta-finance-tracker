@@ -8,11 +8,13 @@ class CreditOperationRequest(BaseModel):
     amount: Decimal
     credit_type_id: int
     operation_date: datetime
+    description: str | None = None
 
 class DebitOperationRequest(BaseModel):
     amount: Decimal
     debit_type_id: int
     operation_date: datetime
+    description: str | None = None
 
 class CreditOperationResponse(BaseModel):
     id: int

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import { listWallets } from '../api/wallets'
 import { listCreditTypes, listDebitTypes } from '../api/types'
 import { transfer, transactionHistory, createCredit, createDebit } from '../api/transactions'
 import { getWalletOperations } from '../api/wallets'
+import { suggestCategory } from '../api/ai'
 import { formatMoney, formatDateTime } from '../utils/format'
 
 const TABS = [
@@ -61,7 +63,7 @@ export default function Transactions() {
         {tab === 'transfer' && <TransferForm wallets={wallets} onDone={setMessage} />}
         {tab === 'credit' && <CreditForm wallets={wallets} creditTypes={creditTypes} onDone={setMessage} />}
         {tab === 'debit' && <DebitForm wallets={wallets} debitTypes={debitTypes} onDone={setMessage} />}
-        {tab === 'history' && <History />}
+        {tab === 'history' && <History wallets={wallets} />}
         {tab === 'operations' && <WalletOperations wallets={wallets} />}
       </div>
     </>
@@ -146,11 +148,31 @@ function TransferForm({ wallets, onDone }) {
 }
 
 function CreditForm({ wallets, creditTypes, onDone }) {
-  const [form, setForm] = useState({ wallet_id: '', amount: '', credit_type_id: '', operation_date: nowLocalISO() })
+  const [form, setForm] = useState({ wallet_id: '', amount: '', credit_type_id: '', operation_date: nowLocalISO(), description: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [aiSuggesting, setAiSuggesting] = useState(false)
+  const [aiError, setAiError] = useState('')
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  async function handleSuggestCategory() {
+    setAiSuggesting(true)
+    setAiError('')
+    try {
+      const result = await suggestCategory({ description: form.description, operation_code: 'credit' })
+      const match = creditTypes.find((t) => t.code === result.category_code)
+      if (match) {
+        update('credit_type_id', String(match.id))
+      } else {
+        setAiError(`AI предложил категорию «${result.category_name}», но она не найдена в списке`)
+      }
+    } catch {
+      setAiError('Не удалось получить подсказку от AI')
+    } finally {
+      setAiSuggesting(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -161,9 +183,11 @@ function CreditForm({ wallets, creditTypes, onDone }) {
         amount: form.amount,
         credit_type_id: Number(form.credit_type_id),
         operation_date: new Date(form.operation_date).toISOString(),
+        description: form.description || null,
       })
       onDone({ type: 'success', text: 'Пополнение добавлено' })
-      setForm({ wallet_id: '', amount: '', credit_type_id: '', operation_date: nowLocalISO() })
+      setForm({ wallet_id: '', amount: '', credit_type_id: '', operation_date: nowLocalISO(), description: '' })
+      setAiError('')
     } catch (err) {
       const detail = err.response?.data?.detail
       onDone({ type: 'error', text: typeof detail === 'string' ? detail : 'Не удалось добавить пополнение' })
@@ -180,6 +204,27 @@ function CreditForm({ wallets, creditTypes, onDone }) {
       </div>
       <form onSubmit={handleSubmit}>
         <div className="grid grid-2">
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Описание операции (необязательно)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={form.description}
+                onChange={(e) => update('description', e.target.value)}
+                placeholder="Например, зарплата за август"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary ai-suggest-btn"
+                onClick={handleSuggestCategory}
+                disabled={!form.description || aiSuggesting}
+              >
+                <Sparkles size={14} />
+                {aiSuggesting ? 'Думаем…' : 'Подсказать категорию'}
+              </button>
+            </div>
+            {aiError && <div className="field-hint" style={{ color: 'var(--accent-red)', marginTop: 4 }}>{aiError}</div>}
+          </div>
           <div className="field">
             <label>Кошелёк</label>
             <select required value={form.wallet_id} onChange={(e) => update('wallet_id', e.target.value)}>
@@ -222,11 +267,31 @@ function CreditForm({ wallets, creditTypes, onDone }) {
 }
 
 function DebitForm({ wallets, debitTypes, onDone }) {
-  const [form, setForm] = useState({ wallet_id: '', amount: '', debit_type_id: '', operation_date: nowLocalISO() })
+  const [form, setForm] = useState({ wallet_id: '', amount: '', debit_type_id: '', operation_date: nowLocalISO(), description: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [aiSuggesting, setAiSuggesting] = useState(false)
+  const [aiError, setAiError] = useState('')
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  async function handleSuggestCategory() {
+    setAiSuggesting(true)
+    setAiError('')
+    try {
+      const result = await suggestCategory({ description: form.description, operation_code: 'debit' })
+      const match = debitTypes.find((t) => t.code === result.category_code)
+      if (match) {
+        update('debit_type_id', String(match.id))
+      } else {
+        setAiError(`AI предложил категорию «${result.category_name}», но она не найдена в списке`)
+      }
+    } catch {
+      setAiError('Не удалось получить подсказку от AI')
+    } finally {
+      setAiSuggesting(false)
+    }
   }
 
   async function handleSubmit(e) {
@@ -237,9 +302,11 @@ function DebitForm({ wallets, debitTypes, onDone }) {
         amount: form.amount,
         debit_type_id: Number(form.debit_type_id),
         operation_date: new Date(form.operation_date).toISOString(),
+        description: form.description || null,
       })
       onDone({ type: 'success', text: 'Списание добавлено' })
-      setForm({ wallet_id: '', amount: '', debit_type_id: '', operation_date: nowLocalISO() })
+      setForm({ wallet_id: '', amount: '', debit_type_id: '', operation_date: nowLocalISO(), description: '' })
+      setAiError('')
     } catch (err) {
       const detail = err.response?.data?.detail
       onDone({ type: 'error', text: typeof detail === 'string' ? detail : 'Не удалось добавить списание' })
@@ -256,6 +323,27 @@ function DebitForm({ wallets, debitTypes, onDone }) {
       </div>
       <form onSubmit={handleSubmit}>
         <div className="grid grid-2">
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label>Описание операции (необязательно)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={form.description}
+                onChange={(e) => update('description', e.target.value)}
+                placeholder="Например, кофе в кофейне"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary ai-suggest-btn"
+                onClick={handleSuggestCategory}
+                disabled={!form.description || aiSuggesting}
+              >
+                <Sparkles size={14} />
+                {aiSuggesting ? 'Думаем…' : 'Подсказать категорию'}
+              </button>
+            </div>
+            {aiError && <div className="field-hint" style={{ color: 'var(--accent-red)', marginTop: 4 }}>{aiError}</div>}
+          </div>
           <div className="field">
             <label>Кошелёк</label>
             <select required value={form.wallet_id} onChange={(e) => update('wallet_id', e.target.value)}>
@@ -297,7 +385,7 @@ function DebitForm({ wallets, debitTypes, onDone }) {
   )
 }
 
-function History() {
+function History({ wallets }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -308,6 +396,12 @@ function History() {
       .catch(() => setError('Не удалось загрузить историю переводов'))
       .finally(() => setLoading(false))
   }, [])
+
+  function walletName(walletId) {
+    if (!walletId) return '—'
+    const wallet = wallets.find((w) => w.id === walletId)
+    return wallet ? wallet.name : `#${walletId}`
+  }
 
   if (loading) return <div className="page-loading"><div className="spinner" /></div>
   if (error) return <div className="alert alert-error">{error}</div>
@@ -332,8 +426,8 @@ function History() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>{formatDateTime(r.transaction_date)}</td>
-                <td>{r.from_wallet_id ? `#${r.from_wallet_id}` : '—'}</td>
-                <td>{r.to_wallet_id ? `#${r.to_wallet_id}` : '—'}</td>
+                <td>{walletName(r.from_wallet_id)}</td>
+                <td>{walletName(r.to_wallet_id)}</td>
                 <td className="num" style={{ textAlign: 'right', fontWeight: 700 }}>
                   {formatMoney(r.from_amount, '')}
                 </td>

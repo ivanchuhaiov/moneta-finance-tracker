@@ -39,6 +39,7 @@ async def create_credit_operation(
         transaction_date=data.operation_date,
         to_wallet_id=wallet_id,
         from_amount=data.amount,
+        description=data.description,
         credit_operation_id=credit_operation.id,
     )
     await repository.save_transaction(session, transaction)
@@ -76,6 +77,7 @@ async def create_debit_operation(
         transaction_date=data.operation_date,
         from_wallet_id=wallet_id,
         from_amount=data.amount,
+        description=data.description,
         debit_operation_id=debit_operation.id,
     )
     await repository.save_transaction(session, transaction)
