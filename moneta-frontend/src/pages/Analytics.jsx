@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts'
+import { Sparkles } from 'lucide-react'
 import TopBar from '../components/TopBar'
 import { useCurrency } from '../context/CurrencyContext'
 import { getExpensesByCategory, getIncomeByCategory, getSummary, getSavingsRate } from '../api/analytics'
+import { getAiSummary } from '../api/ai'
 import { formatMoney, formatPercent, toISODate, firstDayOfMonth, today, PERIOD_PRESETS, presetRange } from '../utils/format'
 
 const PALETTE = ['#3d63f5', '#16a879', '#e69a1f', '#e5484d', '#8657e0', '#0ea5e9', '#f97316', '#22c55e']
@@ -19,6 +21,10 @@ export default function Analytics() {
   const [savings, setSavings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [aiSummary, setAiSummary] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
 
   function load(from = dateFrom, to = dateTo) {
     setLoading(true)
@@ -39,20 +45,35 @@ export default function Analytics() {
       .finally(() => setLoading(false))
   }
 
+  function handleAiSummary() {
+    setAiLoading(true)
+    setAiError('')
+    getAiSummary(currency, dateFrom, dateTo)
+      .then(setAiSummary)
+      .catch(() => setAiError('Не удалось получить AI-обзор'))
+      .finally(() => setAiLoading(false))
+  }
+
   function applyPreset(preset) {
     const { date_from, date_to } = presetRange(preset.key)
     setActivePreset(preset.key)
     setDateFrom(date_from)
     setDateTo(date_to)
+    setAiSummary(null)
+    setAiError('')
     load(date_from, date_to)
   }
 
   function handleManualApply() {
     setActivePreset(null)
+    setAiSummary(null)
+    setAiError('')
     load()
   }
 
   useEffect(() => {
+    setAiSummary(null)
+    setAiError('')
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currency])
@@ -101,6 +122,25 @@ export default function Analytics() {
               Применить
             </button>
           </div>
+        </div>
+
+        <div className="card card-pad ai-summary-card" style={{ marginBottom: 18 }}>
+          <div className="card-head">
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={16} style={{ color: 'var(--accent-purple)' }} />
+              AI-обзор периода
+            </div>
+            <button className="btn btn-sm btn-secondary" onClick={handleAiSummary} disabled={aiLoading}>
+              {aiLoading ? 'Генерируем…' : aiSummary ? 'Обновить' : 'Получить обзор'}
+            </button>
+          </div>
+          {aiError && <div className="alert alert-error" style={{ marginTop: 4 }}>{aiError}</div>}
+          {aiSummary && !aiError && <p className="ai-summary-text">{aiSummary.summary}</p>}
+          {!aiSummary && !aiError && !aiLoading && (
+            <div className="empty-state" style={{ padding: '4px 0 0' }}>
+              Нажмите «Получить обзор», чтобы AI проанализировал доходы, расходы и норму сбережений за выбранный период
+            </div>
+          )}
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}

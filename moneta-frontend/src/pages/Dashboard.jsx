@@ -65,24 +65,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <TopBar
-        title="Дашборд"
-        subtitle="Общая картина по всем кошелькам"
-        actions={
-          <div style={{ display: 'flex', gap: 6 }}>
-            {PERIOD_PRESETS.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                className={`btn btn-sm ${period === p.key ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setPeriod(p.key)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        }
-      />
+      <TopBar title="Дашборд" subtitle="Общая картина по всем кошелькам" />
       <div className="content">
         {error && <div className="alert alert-error">{error}</div>}
 
@@ -108,6 +91,18 @@ export default function Dashboard() {
                 <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', height: PANEL_HEIGHT }}>
                   <div className="card-head">
                     <div className="card-title">Приход / Расход по неделям</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {PERIOD_PRESETS.map((p) => (
+                        <button
+                          key={p.key}
+                          type="button"
+                          className={`btn btn-sm ${period === p.key ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => setPeriod(p.key)}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   {chartData.length === 0 ? (
                     <div className="empty-state">Пока нет данных для графика</div>

@@ -10,6 +10,7 @@ import Transactions from './pages/Transactions'
 import Types from './pages/Types'
 import Analytics from './pages/Analytics'
 import Reports from './pages/Reports'
+import AIChat from './pages/AIChat'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/types" element={<ProtectedRoute><Types /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/ai-chat" element={<ProtectedRoute><AIChat /></ProtectedRoute>} />
 
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

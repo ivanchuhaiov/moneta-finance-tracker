@@ -6,6 +6,7 @@ import {
   Tags,
   BarChart3,
   FileText,
+  Sparkles,
   LogOut,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/types', label: 'Типы и категории', icon: Tags },
   { to: '/analytics', label: 'Аналитика', icon: BarChart3 },
   { to: '/reports', label: 'Отчёты', icon: FileText },
+  { to: '/ai-chat', label: 'AI-ассистент', icon: Sparkles },
 ]
 
 export default function Sidebar() {
